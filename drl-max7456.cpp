@@ -1,6 +1,9 @@
-#include "max7456.h"
+#include "drl-max7456.h"
 #include <Arduino.h>
 #include <SPI.h>
+#ifndef ARDUINO_ARCH_AVR
+#include <avr/dtostrf.h>
+#endif
 
 //-----------------------------------------------------------------------------
 // Implements Max7456::Max7456
@@ -8,6 +11,49 @@
 Max7456::Max7456(byte pinCS) {
   this->init(pinCS);
 }
+
+
+// 0 =NTSC, 1 = PAL, 2 = loss
+byte Max7456::DetectVideoType() {
+    digitalWrite(_pinCS, LOW);
+    SPI.transfer(STAT_ADDRESS_READ);
+    byte status = SPI.transfer(0x00);
+    digitalWrite(_pinCS, HIGH);
+    if (status & 0x04) {
+      return 2; // No video detected
+    } else if (status & 0x02) {
+      return 1; // PAL detected
+    } else if (status & 0x01) {
+      return 0; // NTSC detected
+    }
+    return 2; // No video detected/Video type unknown/Failed
+}
+
+void Max7456::DetectAndSetVideoType() {
+    byte videoType = DetectVideoType();
+    if (videoType == 2) {
+      Serial.println("Unable to detect video type... Defauling to NTSC"); // We init with NTSC by default and this is what DRL does so we ball
+      return;
+    } else if (videoType == 1) {
+      Serial.println("Detected PAL type input video");
+    } else if (videoType == 0) {
+      Serial.println("Detected NTSC type input video");
+    }
+
+    digitalWrite(_pinCS, LOW);
+    SPI.transfer(VM0_ADDRESS_WRITE);
+
+    _regVm0.whole = 0x00;
+    _regVm0.bits.videoSelect = videoType; //NTSC
+    _regVm0.bits.softwareResetBit = 1;
+    SPI.transfer(_regVm0.whole);
+    digitalWrite(_pinCS, HIGH);
+}
+
+
+
+
+
 
 //-----------------------------------------------------------------------------
 // Implements Max7456::setBlinkParams
@@ -22,7 +68,6 @@ void Max7456::setBlinkParams(byte blinkBase, byte blinkDC) {
   SPI.transfer(_regVm1.whole);
   digitalWrite(_pinCS, HIGH);
 }
-
 //-----------------------------------------------------------------------------
 // Implements Max7456::setDisplayOffsets
 //----------------------------------------------------------------------------
@@ -313,7 +358,7 @@ void Max7456::init(byte iPinCS) {
   SPI.transfer(VM0_ADDRESS_WRITE);
 
   _regVm0.whole = 0x00;
-  _regVm0.bits.videoSelect = 1; //PAL
+  _regVm0.bits.videoSelect = 0; //NTSC
   _regVm0.bits.softwareResetBit = 1;
   SPI.transfer(_regVm0.whole);
   digitalWrite(_pinCS, HIGH);

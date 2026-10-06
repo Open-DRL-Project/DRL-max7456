@@ -56,6 +56,11 @@ public:
    */
   void init(byte pinCS);
 
+
+  byte DetectVideoType();
+
+  void DetectAndSetVideoType();
+
   /**
    * Set the base time for blink.
    * @param blinkBase : the base time (see datasheet)
